@@ -20,6 +20,5 @@ class CompensatePrunner(object):
         # first mask the tensor based on sensitivity criterion.
         zeros_mask_dict[param_name].mask = distiller.create_mask_similarity_criterion(param, sensitivity)
 
-        threshold = self.threshold
         # compensate masked elements with elements kept.
-        zeros_mask_dict[param_name].mask = distiller.create_mask_similarity_criterion(param, threshold)
+        zeros_mask_dict[param_name].mask = distiller.create_mask_similarity_criterion(param, self.threshold, self.bn_lambda)
