@@ -21,6 +21,7 @@
 - LRPolicy: learning-rate decay scheduling
 - QuantizationPolicy: quantization scheduling
 """
+from distiller.pruning.compensation import compensation, decompose, reload_weights
 import torch
 import torch.nn as nn
 import torch.optim.lr_scheduler
@@ -42,6 +43,7 @@ class ScheduledTrainingPolicy(object):
 
     The CompressionScheduler invokes these methods as the training progresses.
     """
+
     def __init__(self, classes=None, layers=None):
         self.classes = classes
         self.layers = layers
@@ -86,6 +88,7 @@ class ScheduledTrainingPolicy(object):
 class PruningPolicy(ScheduledTrainingPolicy):
     """Base class for pruning policies.
     """
+
     def __init__(self, pruner, pruner_args, classes=None, layers=None):
         """
         Arguments:
@@ -215,7 +218,7 @@ class PruningPolicy(ScheduledTrainingPolicy):
         global_mini_batch_id = epoch * minibatches_per_epoch + minibatch_id
         if ((minibatch_id > 0) and
             (self.mini_batch_pruning_frequency != 0) and
-            (global_mini_batch_id % self.mini_batch_pruning_frequency == 0)):
+                (global_mini_batch_id % self.mini_batch_pruning_frequency == 0)):
             # This is _not_ the first mini-batch of a new epoch (performed in on_epoch_begin)
             # and a pruning step is scheduled
             set_masks = True
@@ -224,12 +227,29 @@ class PruningPolicy(ScheduledTrainingPolicy):
             # Because we skipped the first mini-batch of the first epoch (global_mini_batch_id == 0)
             set_masks = True
 
-        for param_name, param in model.named_parameters():
-            if set_masks:
-                if self.fold_bn:
-                    param = self._fold_batchnorm(model, param_name, param, self.named_modules, self.sg)
-                self.pruner.set_param_mask(param, param_name, zeros_mask_dict, meta)
-            zeros_mask_dict[param_name].apply_mask(param)
+        scaling_matrix = None
+        for layer_name, layer in model.named_modules():
+            if not layer_name: # is the parent node
+                continue
+            if scaling_matrix:
+                # the first layer (bias, weight) has no prior layer's mask to compensate
+                compensated_weights = compensation(layer_name, layer.named_parameters()['weight'], scaling_matrix)
+                reload_weights(model, layer_name, compensated_weights)
+
+            # create & apply mask before creating mask for the next layer, after compensating this layer
+            for param_name, param in layer.named_parameters():
+                if set_masks:
+                    if self.fold_bn:
+                        param = self._fold_batchnorm(model, '.'.join(
+                            [layer_name, param_name]), param, self.named_modules, self.sg)
+                    self.pruner.set_param_mask(param, '.'.join([layer_name, param_name]), zeros_mask_dict, meta)
+                if param_name.index('weight') >= 0:
+                    print(zeros_mask_dict.keys(), '.'.join(                        [layer_name, param_name]))
+                    scaling_matrix = decompose(param, zeros_mask_dict['.'.join(
+                        [layer_name, param_name])], torch.threshold)
+
+            for param_name, param in layer.named_parameters():
+                zeros_mask_dict['.'.join([layer_name, param_name])].apply_mask(param)
 
     def before_parameter_optimization(self, model, epoch, minibatch_id, minibatches_per_epoch,
                                       zeros_mask_dict, meta, optimizer):
@@ -259,6 +279,7 @@ class RegularizationPolicy(ScheduledTrainingPolicy):
     """Regularization policy.
 
     """
+
     def __init__(self, regularizer, keep_mask=False):
         super(RegularizationPolicy, self).__init__()
         self.regularizer = regularizer
@@ -301,6 +322,7 @@ class LRPolicy(ScheduledTrainingPolicy):
     """Learning-rate decay scheduling policy.
 
     """
+
     def __init__(self, lr_scheduler):
         super(LRPolicy, self).__init__()
         self.lr_scheduler = lr_scheduler

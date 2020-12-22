@@ -81,7 +81,7 @@ pruners:
 
   conv45_pruner:
     class: 'AutomatedGradualPruner'
-    initial_sparsity : 0.03
+    initial_sparsity : 0. 
     final_sparsity: 0.43
     weights: ['features.module.8.weight', 'features.module.10.weight']
 

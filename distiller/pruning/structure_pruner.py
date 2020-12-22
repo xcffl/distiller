@@ -22,7 +22,7 @@ msglogger = logging.getLogger()
 class StructureParameterPruner(distiller.GroupThresholdMixin):
     """Prune parameter structures.
 
-    Pruning criterion: average L1-norm.  If the average L1-norm (absolute value) of the eleements
+    Pruning criterion: average L1-norm.  If the average L1-norm (absolute value) of the elements
     in the structure is below threshold, then the structure is pruned.
 
     We use the average, instead of plain L1-norm, because we don't want the threshold to depend on

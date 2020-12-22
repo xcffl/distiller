@@ -16,6 +16,7 @@
 
 
 import distiller
+from .ranked_structures_pruner import *
 
 
 class SensitivityPruner(object):
@@ -53,3 +54,10 @@ class SensitivityPruner(object):
             sensitivity = self.sensitivities[param_name]
 
         zeros_mask_dict[param_name].mask = distiller.create_mask_sensitivity_criterion(param, sensitivity)
+
+class L1RankedStructureParameterPruner_SP(SensitivityPruner):
+    def __init__(self, name, sensitivities, group_type, weights, group_dependency=None, kwargs=None):
+        super().__init__(name, sensitivities)
+        self.pruner = L1RankedStructureParameterPruner(name, group_type, desired_sparsity=0, weights=weights,
+                                                       group_dependency=group_dependency, kwargs=kwargs)
+
